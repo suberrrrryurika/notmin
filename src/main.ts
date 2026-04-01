@@ -75,6 +75,35 @@ function setupSidebar() {
     }
 }
 /**
+ * 初始化自启 UI 绑定
+ */
+async function initAutostartUI() {
+    const checkbox = document.getElementById('autostart-checkbox') as HTMLInputElement;
+    if (!checkbox) return;
+
+    // 1. 获取后端当前真实的自启状态并更新 UI
+    const isAuto = await checkAutostartStatus();
+    checkbox.checked = isAuto;
+
+    // 2. 绑定点击事件
+    checkbox.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        // 禁用 checkbox 防止在处理过程中被多次点击
+        target.disabled = true;
+        
+        await toggleAutostart(target.checked);
+        
+        // 模拟一个简单的视觉反馈
+        const statusLabel = document.getElementById('note-status');
+        if (statusLabel) {
+            statusLabel.innerText = target.checked ? "自启已激活" : "自启已禁用";
+            setTimeout(() => statusLabel.innerText = "", 2000);
+        }
+
+        target.disabled = false;
+    });
+}
+/**
  * 渲染笔记列表
  * @param db 数据库实例
  */
@@ -101,6 +130,8 @@ async function setupApp() {
         // 3. 渲染笔记列表
         await renderNotes(db);
         setupSidebar();
+
+        await initAutostartUI();
         // 4. 绑定保存按钮事件
         const saveBtn = document.getElementById('saveNoteBtn');
         saveBtn?.addEventListener('click', async () => {
@@ -293,6 +324,41 @@ function calculateNextReminder(remindTime: number, interval: number): Date {
     }
 
     return nextReminder;
+}
+
+import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
+
+/**
+ * 检查当前是否已开启开机自启
+ * 可以在 UI 组件挂载时调用，用来初始化 Checkbox 或 Switch 的状态
+ */
+async function checkAutostartStatus(): Promise<boolean> {
+  try {
+    const res = await isEnabled();
+    console.log('当前开机自启状态:', res);
+    return res;
+  } catch (err) {
+    console.error('获取自启状态失败:', err);
+    return false;
+  }
+}
+
+/**
+ * 切换开机自启状态
+ * @param shouldEnable 是否开启
+ */
+async function toggleAutostart(shouldEnable: boolean) {
+  try {
+    if (shouldEnable) {
+      await enable();
+      console.log('已设置开机自启 [SUCCESS]');
+    } else {
+      await disable();
+      console.log('已取消开机自启 [DISABLED]');
+    }
+  } catch (err) {
+    console.error('设置自启失败:', err);
+  }
 }
 // 统一启动入口
 window.addEventListener("DOMContentLoaded", setupApp);

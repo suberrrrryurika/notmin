@@ -11,7 +11,6 @@
 
 1. 安装依赖：
 
-   - cd frontend
    - npm install
 2. 或在开发模式下运行：
 

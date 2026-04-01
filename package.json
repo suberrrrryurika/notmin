@@ -15,6 +15,7 @@
     "vite": "^2.8.6"
   },
   "dependencies": {
+    "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-sql": "^2.3.2"
   }
 }

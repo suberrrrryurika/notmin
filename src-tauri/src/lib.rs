@@ -4,6 +4,7 @@ use tauri::{
     Manager, Runtime,
 };
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_autostart::MacosLauncher; // 引入自启插件需要的 Trait
 
 #[tauri::command]
 fn send_task_notification(app: tauri::AppHandle, title: String, message: String) {
@@ -17,23 +18,30 @@ fn send_task_notification(app: tauri::AppHandle, title: String, message: String)
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // --- 1. 注册所有插件 ---
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
+        // 合并自启插件初始化
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::AppleScript, 
+            core::option::Option::Some(vec!["--autostart"]) 
+        ))
+        
         .invoke_handler(tauri::generate_handler![send_task_notification])
+        
         .setup(|app| {
-            // --- 1. 创建托盘右键菜单 ---
+            // --- 2. 创建托盘右键菜单 ---
             let quit_i = MenuItem::with_id(app, "quit", "退出指令 [EXIT]", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "恢复终端 [SHOW]", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
-            // --- 2. 配置系统托盘 ---
+            // --- 3. 配置系统托盘 ---
             let _tray = TrayIconBuilder::new()
-                // 使用默认图标，确保 tauri.conf.json 中配置了图标路径
                 .icon(app.default_window_icon().unwrap().clone()) 
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
-                        app.exit(0); // 彻底退出程序
+                        app.exit(0); 
                     }
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
@@ -44,7 +52,6 @@ pub fn run() {
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // 左键点击图标时恢复窗口
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
@@ -60,17 +67,27 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // --- 4. 处理开机自启时的静默启动 (可选) ---
+            // 如果检测到启动参数包含 --autostart，则初始化时不显示窗口
+            let args: Vec<String> = std::env::args().collect();
+            if args.contains(&"--autostart".to_string()) {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+
             Ok(())
         })
-        // --- 3. 关键：拦截关闭按钮事件 ---
-        // 这能保证前端的 setTimeout 定时器即使在窗口“关闭”后依然在后台运行
+        
+        // --- 5. 拦截关闭按钮事件，转为隐藏 ---
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                let _ = window.hide(); // 隐藏窗口
-                api.prevent_close();   // 阻止进程销毁
+                let _ = window.hide(); 
+                api.prevent_close(); 
             }
             _ => {}
         })
+        
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用时出错");
 }
