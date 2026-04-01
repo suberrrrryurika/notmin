@@ -112,7 +112,7 @@ async function setupApp() {
             const remindTime = timeInput.value;
 
             if (!content) {
-                alert("请输入笔记内容");
+                alert("请键入任务");
                 return;
             }
 
