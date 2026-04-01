@@ -1,0 +1,48 @@
+# --- 1. Rust/Tauri 后端相关 ---
+# 忽略 Rust 编译产物（非常大！）
+src-tauri/target/
+
+# 忽略本地生成的数据库文件
+src-tauri/*.db
+src-tauri/*.db-journal
+
+# 忽略 Tauri 自动生成的权限架构文件
+src-tauri/gen/
+
+# --- 2. 前端相关 ---
+# 依赖包
+node_modules/
+.pnpm-store/
+
+# 编译输出目录（Vite/Webpack 等的产物）
+dist/
+build/
+.next/
+
+# 日志文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- 3. 环境变量与密钥 (安全关键) ---
+.env
+*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- 4. 操作系统与编辑器 ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vshistory/
+
+# --- 5. Tauri 特定 ---
+# 如果你使用了特定的图标生成工具产生的临时文件
+src-tauri/icons/icon.ico
+src-tauri/icons/icon.icns
+# 注意：保留原始的 png 图标，只忽略编译出的平台特定图标（可选）

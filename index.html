@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tauri Quest Terminal</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <header id="titlebar" data-tauri-drag-region>
+    <div class="window-app-info"> 
+      <div class="menu-trigger" id="sidebarToggle" title="切换任务发布面板">
+        <span class="app-icon">◈</span>
+        <span>notmin</span> 
+        <span class="toggle-icon">≡</span> 
+      </div>
+    </div>
+    <div class="window-controls">
+      <button id="notifyBtn" class="secondary-btn">通讯测试 [TEST]</button> 
+      <div class="control-btn" id="titlebar-minimize">⚊</div>
+      <div class="control-btn" id="titlebar-maximize">▢</div>
+      <div class="control-btn close" id="titlebar-close">✕</div>
+    </div>
+  </header>
+
+  <main id="app">
+    <div class="app-shell">
+      <aside class="sidebar collapsed" id="sidebar">
+        <div class="sidebar-inner">
+          <section class="note-editor">
+            <h2><span class="symbol">>></span> 目标发布 </h2>
+            
+            <div class="input-wrapper"> 
+              <textarea id="note-input" placeholder="输入任务..."></textarea> 
+            </div>
+
+            <div class="timer-configs">
+              <div class="config-item"> 
+                <label>同步时间 :</label> 
+                <input type="datetime-local" id="remind-time">
+              </div>
+              <div class="config-item"> 
+                <label>重置频率 :</label> 
+                <select id="remind-freq">
+                  <option value="once">单次执行 [SINGLE]</option>
+                  <option value="daily">每日循环 [DAILY]</option>
+                  <option value="weekly">每周例行 [WEEKLY]</option>
+                </select> 
+              </div>
+            </div>
+
+            <div class="actions"> 
+              <button id="saveNoteBtn" class="primary-btn">接受任务 [ACCEPT]</button> 
+            </div>
+            <div id="note-status" class="status-message"></div>
+          </section>
+        </div>
+      </aside>
+
+      <section class="note-list">
+        <h2><span class="symbol">>></span> 任务追踪 </h2>
+        <div id="notes-container">
+          <p class="empty-msg">正在等待终端指令...</p>
+        </div>
+      </section>
+
+      <div class="overlay" id="overlay"></div>
+    </div>
+  </main>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

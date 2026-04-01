@@ -1,0 +1,415 @@
+/*
+
+  Clean, warm-white theme and deduplicated rules
+
+  主色调：暖白色；移除重复定义，保留必要布局样式
+
+*/
+
+
+
+:root {
+
+    --font-stack: Inter, system-ui, 'Segoe UI', "Microsoft YaHei", Arial, sans-serif;
+
+    --bg: #FBF6EE;
+    /* 页面背景（暖白） */
+
+    --panel-bg: #FFF9F3;
+    /* 卡片/面板 背景 */
+
+    --sidebar-bg: #F4EDE0;
+    /* 侧边栏 背景 */
+
+    --text: #2b2b2b;
+    /* 主要文字（深色） */
+
+    --muted: #7a6f60;
+    /* 辅助文字 */
+
+    --accent: #CDA56A;
+    /* 重点色（暖金） */
+
+    --border-color: #E6DACB;
+    /* 边框颜色 */
+
+    --btn-bg: #D9C7A3;
+
+    --btn-hover: #CBB08C;
+
+    --sidebar-width: 320px;
+    --app-max-width: 1100px;
+
+}
+
+
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-stack);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+}
+
+
+
+/* Titlebar */
+
+/* Titlebar - keep on top so window controls remain reachable when maximized */
+#titlebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 36px;
+    background: var(--sidebar-bg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 8px;
+    z-index: 100;
+}
+
+.window-app-info {
+    display: flex;
+    align-items: center;
+    color: var(--accent);
+}
+
+.app-icon {
+    margin-right: 8px;
+}
+
+.window-controls {
+    display: flex;
+    gap: 6px;
+}
+
+.window-controls .control-btn {
+    width: 36px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.window-controls .control-btn:hover {
+    background: var(--btn-hover);
+}
+
+.window-controls .control-btn.close:hover {
+    background: #E85B5B;
+    color: #fff;
+}
+
+
+
+/* Layout */
+
+/* App root: center the app and let .app-shell constrain max width
+   use percentage width here to avoid horizontal scrollbars from vw on zoom */
+/* App root: center the app and let .app-shell constrain max width
+   use percentage width here to avoid horizontal scrollbars from vw on zoom */
+#app {
+    display: flex;
+    justify-content: center; /* center the app to create a narrower visual width */
+    width: 100%;
+    min-height: calc(100vh - 36px);
+    padding-top: 36px; /* make room for fixed titlebar */
+    overflow: hidden;
+    background: transparent;
+    position: relative; /* for absolute-positioned sidebar/overlay */
+}
+
+/* Sidebar: fixed width, but collapsible without causing main content overflow */
+
+/* Sidebar as an overlay so it doesn't shrink the main content when opened */
+.sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border-color);
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    transform: translateX(-100%); /* hidden by default */
+    transition: transform 0.18s ease, opacity 0.12s ease;
+    z-index: 300; /* high so native dropdowns render above overlay */
+    box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+}
+
+.sidebar:not(.collapsed) {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sidebar.collapsed {
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.sidebar-inner {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+/* Make editor fluid inside sidebar so it never forces layout width */
+.note-editor {
+    width: 100%;
+    max-width: 100%;
+    background: var(--panel-bg);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.app-shell {
+    width: 100%;
+    max-width: var(--app-max-width);
+    display: flex;
+    flex: 1 1 auto;
+    margin: 0 12px; /* small horizontal breathing room */
+    z-index: 10; /* keep main content under overlay/sidebar */
+}
+
+.note-list {
+    flex: 1 1 auto;
+    padding: 24px;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+/* Overlay used when sidebar is open in overlay mode */
+.overlay {
+    /* only dim the main content area (to the right of sidebar) so sidebar UI and dropdowns remain fully usable */
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: var(--sidebar-width);
+    background: rgba(0,0,0,0.08); /* very light dim */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease, left 0.18s ease;
+    z-index: 90; /* below the sidebar (300) but above content (10) */
+}
+.overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+/* Only allow pointer events when overlay is active to avoid blocking inputs */
+.overlay {
+    pointer-events: none;
+}
+.overlay.active {
+    pointer-events: auto;
+}
+
+/* Ensure interactive elements are not inside the OS drag region and accept events */
+/* Tauri uses -webkit-app-region: drag on drag regions; explicitly opt-out here */
+.sidebar,
+.sidebar-inner,
+.note-editor,
+textarea,
+input,
+select,
+button,
+.control-btn,
+.menu-trigger {
+    -webkit-app-region: no-drag;
+}
+
+/* Make sure form controls always accept pointer events */
+textarea, input, select, button {
+    pointer-events: auto;
+}
+
+
+
+/* Form elements */
+
+textarea,
+input[type="datetime-local"],
+select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--panel-bg);
+    color: var(--text);
+    font-family: inherit;
+}
+
+textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+
+
+/* Buttons */
+
+.actions {
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+.primary-btn {
+    background: var(--btn-bg);
+    color: var(--text);
+}
+
+.primary-btn:hover {
+    background: var(--btn-hover);
+}
+
+.secondary-btn {
+    background: transparent;
+    color: var(--accent);
+}
+
+
+
+/* Notes */
+
+.note-item {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    transition: transform .12s ease;
+}
+
+.note-item:hover {
+    transform: translateY(-3px);
+}
+
+.note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.quest-status {
+    font-size: .85rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--muted);
+}
+
+.note-content {
+    font-size: .98rem;
+    color: var(--text);
+}
+
+.note-meta {
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+.delete-btn {
+    padding: 6px 10px;
+    background: #E85B5B;
+    color: #fff;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+}
+
+.delete-btn:hover {
+    background: #D84B4B;
+}
+
+
+
+.card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    border-radius: 12px;
+}
+
+.empty-msg {
+    text-align: center;
+    color: var(--muted);
+    font-size: 1rem;
+}
+
+
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+
+
+/* small utilities */
+
+#notifybtn {
+    background: var(--btn-bg);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+}
+
+
+
+/* keep menu-trigger minimal */
+
+.menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.menu-trigger:hover { background: rgba(0,0,0,0.03); }
+
+/* small responsive tweaks when app is narrow */
+@media (max-width: 760px) {
+  :root { --sidebar-width: 260px; }
+  .app-shell { padding: 12px; }
+  .note-editor { padding: 12px; }
+}
