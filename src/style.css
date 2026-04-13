@@ -89,6 +89,15 @@ body {
     margin-right: 8px;
 }
 
+.app-icon-img {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    vertical-align: middle;
+    border-radius: 4px;
+}
+
 .window-controls {
     display: flex;
     gap: 6px;

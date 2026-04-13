@@ -212,8 +212,12 @@ async function renderNotes(db: Database) {
     if (!container) return;
 
     try {
-        // 从数据库读取所有笔记，按 ID 倒序（最新的在最前）
-        const notes = await db.select("SELECT * FROM notes ORDER BY id DESC") as any[];
+        // 从数据库读取所有笔记，按提醒时间排序（最接近/最早的在前）。
+        // remind_at 可能为 NULL 或空字符串，我们把没有提醒时间的条目放在后面。
+        // 使用 replace 将可能的 'T' 分隔符转为空格以兼容 SQLite 的 datetime() 解析。
+        const notes = await db.select(
+            "SELECT * FROM notes ORDER BY CASE WHEN remind_at IS NULL OR remind_at = '' THEN 1 ELSE 0 END, datetime(replace(remind_at,'T',' ')) ASC, id DESC"
+        ) as any[];
 
         // 重置容器内容
         container.innerHTML = '';
@@ -239,17 +243,54 @@ async function renderNotes(db: Database) {
             // 过滤过期笔记
             const remindTime = new Date(note.remind_at).getTime();
             if (remindTime < currentTime) {
+                const timeDiff = currentTime - remindTime;
                 if (note.frequency === 'once') {
                     // 单次任务，直接删除
                     await db.execute("DELETE FROM notes WHERE id = ?", [note.id]);
                     console.log(`任务已删除，ID: ${note.id}`);
                 } else if (note.frequency === 'daily') {
                     // 处理每日任务
+                    // 如果原始提醒是在今天且是最近一次（小于一个周期），则认为是启动时漏掉的提醒，立即发送一次通知再更新下一次
+                    const originalDate = new Date(remindTime);
+                    const nowDate = new Date(currentTime);
+                    const isSameDay = originalDate.getFullYear() === nowDate.getFullYear()
+                        && originalDate.getMonth() === nowDate.getMonth()
+                        && originalDate.getDate() === nowDate.getDate();
+
+                    if (isSameDay && timeDiff < 24 * 60 * 60 * 1000) {
+                        // 发送一次补偿通知
+                        try {
+                            await invoke('send_task_notification', {
+                                title: '任务提醒',
+                                message: note.content
+                            });
+                            console.log(`已发送补偿通知，ID: ${note.id}`);
+                        } catch (err) {
+                            console.warn('发送补偿通知失败:', err);
+                        }
+                    }
+
                     const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);  // 每日任务
                     await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
                     console.log(`已更新每日任务的提醒时间: ${nextReminder.toISOString()}`);
                 } else if (note.frequency === 'weekly') {
                     // 处理每周任务
+                    const originalDate = new Date(remindTime);
+                    const nowDate = new Date(currentTime);
+                    const isSameWeekday = originalDate.getDay() === nowDate.getDay();
+
+                    if (isSameWeekday && timeDiff < 7 * 24 * 60 * 60 * 1000) {
+                        try {
+                            await invoke('send_task_notification', {
+                                title: '任务提醒',
+                                message: note.content
+                            });
+                            console.log(`已发送补偿通知（每周），ID: ${note.id}`);
+                        } catch (err) {
+                            console.warn('发送补偿通知失败:', err);
+                        }
+                    }
+
                     const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);  // 每周任务
                     await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
                     console.log(`已更新每周任务的提醒时间: ${nextReminder.toISOString()}`);
@@ -266,6 +307,7 @@ async function renderNotes(db: Database) {
     <div class="note-header">
         <span class="quest-status ${freqValue}">[ ${freqLabel} ]</span>
         <span class="note-content">${note.content}</span>
+        <button class="edit-btn" data-id="${note.id}">编辑</button>
         <button class="delete-btn" data-id="${note.id}">删除</button> <!-- 删除按钮 -->
     </div>
     <div class="note-meta">
@@ -288,6 +330,97 @@ async function renderNotes(db: Database) {
                 }
             });
 
+            // 编辑按钮点击事件（内联编辑内容）
+            const editBtn = noteElement.querySelector('.edit-btn');
+            editBtn?.addEventListener('click', async () => {
+                const contentSpan = noteElement.querySelector('.note-content') as HTMLSpanElement;
+                if (!contentSpan) return;
+
+                // 创建编辑 UI（content, remind_at, frequency）
+                const originalContent = contentSpan.innerText;
+                const textarea = document.createElement('textarea');
+                textarea.className = 'edit-textarea';
+                textarea.value = originalContent;
+                textarea.style.width = '100%';
+                textarea.style.boxSizing = 'border-box';
+
+                // 创建提醒时间输入框（datetime-local）
+                const metaRow = document.createElement('div');
+                metaRow.className = 'edit-meta-row';
+                const timeInput = document.createElement('input');
+                timeInput.type = 'datetime-local';
+                timeInput.value = note.remind_at ? note.remind_at.replace(' ', 'T') : '';
+                const freqSelect = document.createElement('select');
+                freqSelect.innerHTML = `
+                    <option value="once">单次执行 [SINGLE]</option>
+                    <option value="daily">每日循环 [DAILY]</option>
+                    <option value="weekly">每周例行 [WEEKLY]</option>
+                `;
+                freqSelect.value = note.frequency || 'once';
+                metaRow.appendChild(timeInput);
+                metaRow.appendChild(freqSelect);
+
+                // 替换内容显示为编辑框与元数据行
+                contentSpan.replaceWith(textarea);
+                const header = noteElement.querySelector('.note-header');
+                header?.insertAdjacentElement('afterend', metaRow);
+
+                // 隐藏编辑和删除按钮
+                (editBtn as HTMLElement).style.display = 'none';
+                (deleteBtn as HTMLElement).style.display = 'none';
+
+                // 创建保存与取消按钮
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'save-edit-btn';
+                saveBtn.innerText = '保存';
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'cancel-edit-btn';
+                cancelBtn.innerText = '取消';
+
+                header?.appendChild(saveBtn);
+                header?.appendChild(cancelBtn);
+
+                // 保存事件：更新 content, remind_at, frequency
+                saveBtn.addEventListener('click', async () => {
+                    const newContent = textarea.value.trim();
+                    const newRemindAt = timeInput.value ? timeInput.value.replace('T', ' ') : null;
+                    const newFreq = freqSelect.value;
+
+                    if (!newContent) {
+                        alert('任务内容不能为空');
+                        return;
+                    }
+
+                    try {
+                        await db.execute("UPDATE notes SET content = ?, remind_at = ?, frequency = ? WHERE id = ?", [newContent, newRemindAt, newFreq, note.id]);
+                        console.log(`任务已更新，ID: ${note.id}`);
+                    } catch (err) {
+                        console.error('更新任务失败:', err);
+                        alert('保存失败，请重试');
+                        return;
+                    }
+
+                    // 重新渲染列表以反映变化
+                    await renderNotes(db);
+                });
+
+                // 取消事件
+                cancelBtn.addEventListener('click', () => {
+                    // 恢复原始显示
+                    const restoredSpan = document.createElement('span');
+                    restoredSpan.className = 'note-content';
+                    restoredSpan.innerText = originalContent;
+                    textarea.replaceWith(restoredSpan);
+                    metaRow.remove();
+
+                    // 恢复按钮状态并移除保存/取消
+                    (editBtn as HTMLElement).style.display = '';
+                    (deleteBtn as HTMLElement).style.display = '';
+                    saveBtn.remove();
+                    cancelBtn.remove();
+                });
+            });
+
             container.appendChild(noteElement);
         }
 
@@ -299,31 +432,36 @@ async function renderNotes(db: Database) {
 
 // 计算下一次提醒时间的函数
 function calculateNextReminder(remindTime: number, interval: number): Date {
-    const currentTime = new Date().getTime();
-    let nextReminder = new Date(remindTime);
+    const currentTime = Date.now();
+    const originalDate = new Date(remindTime);
 
-    // 获取原定的小时、分钟、秒
-    const originalHours = nextReminder.getHours();
-    const originalMinutes = nextReminder.getMinutes();
-    const originalSeconds = nextReminder.getSeconds();
+    // 原始计划的时分秒
+    const originalHours = originalDate.getHours();
+    const originalMinutes = originalDate.getMinutes();
+    const originalSeconds = originalDate.getSeconds();
 
-    const timeDiff = currentTime - remindTime;
+    // 先构造一个候选时间：今天的原始时间
+    const candidate = new Date(currentTime);
+    candidate.setHours(originalHours, originalMinutes, originalSeconds, 0);
 
-    // 如果错过了提醒，计算下一个提醒时间
-    if (timeDiff >= 0 && timeDiff < interval) {
-        nextReminder = new Date(currentTime);
-        nextReminder.setHours(originalHours, originalMinutes, originalSeconds, 0);  // 设置为今天的时间
+    const GRACE_MS = 60 * 1000; // 允许 1 分钟的容错窗口，避免因毫秒/秒差距把今天跳过
 
-        if (nextReminder.getTime() < currentTime) {
-            nextReminder = new Date(nextReminder.getTime() + interval); // 设置为下一个周期
-            nextReminder.setHours(originalHours, originalMinutes, originalSeconds, 0);
-        }
-    } else {
-        nextReminder = new Date(currentTime + interval); // 设置为当前时间后的一个周期
-        nextReminder.setHours(originalHours, originalMinutes, originalSeconds, 0);
+    // 如果候选时间在现在之前但在容错窗口内，认为应当在今天触发（不要跳到下一周期）
+    if (candidate.getTime() >= currentTime - GRACE_MS) {
+        // 如果候选时间仍然小于当前时间但在容错内，返回候选时间（视为今天）
+        return candidate;
     }
 
-    return nextReminder;
+    // 否则候选时间过早，向后移动到下一个有效周期（可能需要加多个周期以追平当前时间）
+    let next = new Date(candidate.getTime() + interval);
+    // 循环直到 next 在当前时间之后
+    while (next.getTime() <= currentTime) {
+        next = new Date(next.getTime() + interval);
+    }
+
+    // 确保时分秒与原始计划一致（虽然通常已经保持一致）
+    next.setHours(originalHours, originalMinutes, originalSeconds, 0);
+    return next;
 }
 
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
