@@ -322,6 +322,23 @@ button {
     background: var(--panel-bg);
     border-color: var(--accent);
 }
+#refreshBtn {
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    line-height: 1;
+}
+#refreshBtn:hover {
+    background: var(--panel-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: rotate(90deg);
+}
 
 .status-message {
     margin-top: 12px;

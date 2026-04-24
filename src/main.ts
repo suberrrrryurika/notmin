@@ -136,6 +136,32 @@ async function setupApp() {
         setupSidebar();
 
         await initAutostartUI();
+
+        // 为所有尚未过期的任务设置 setTimeout 精准通知
+        // （弥补 processExpiredNotes 每 10 秒轮询的延迟）
+        try {
+            const pendingNotes = await db.select("SELECT * FROM notes") as any[];
+            const now = Date.now();
+            for (const note of pendingNotes) {
+                if (!note.remind_at) continue;
+                const remindTime = new Date(note.remind_at).getTime();
+                const delayMs = remindTime - now;
+                if (delayMs > 0) {
+                    const noteId = note.id;
+                    setTimeout(async () => {
+                        // 重新从数据库读取最新数据（可能已被其他逻辑更新）
+                        const db = await Database.load("sqlite:tasks.db");
+                        const latest = await db.select("SELECT * FROM notes WHERE id = ?", [noteId]) as any[];
+                        if (latest.length > 0) {
+                            await triggerNoteReminder(db, latest[0]);
+                        }
+                    }, delayMs);
+                    console.log(`已为任务 ID:${noteId} 设置定时通知，${Math.round(delayMs / 1000)}秒后触发`);
+                }
+            }
+        } catch (err) {
+            console.warn('设置精准定时通知失败:', err);
+        }
         // 4. 绑定保存按钮事件
         const saveBtn = document.getElementById('saveNoteBtn');
         saveBtn?.addEventListener('click', async () => {
@@ -179,12 +205,18 @@ async function setupApp() {
                 const delayMs = remindDate.getTime() - Date.now();
 
                 if (delayMs > 0) {
-                    setTimeout(async () => {
-                        await invoke('send_task_notification', {
-                            title: '任务提醒',
-                            message: content
-                        });
-                    }, delayMs);
+                    // 先查询刚插入的任务 ID
+                    const inserted = await db.select("SELECT last_insert_rowid() as id") as any[];
+                    const newNoteId = inserted[0]?.id;
+                    if (newNoteId) {
+                        setTimeout(async () => {
+                            const freshDb = await Database.load("sqlite:tasks.db");
+                            const latest = await freshDb.select("SELECT * FROM notes WHERE id = ?", [newNoteId]) as any[];
+                            if (latest.length > 0) {
+                                await triggerNoteReminder(freshDb, latest[0]);
+                            }
+                        }, delayMs);
+                    }
                 }
             }
         });
@@ -196,6 +228,17 @@ async function setupApp() {
                 title: '测试通知',
                 message: '如果你看到这个，说明通知功能正常！'
             });
+        });
+
+        // 6. 绑定刷新列表按钮
+        const refreshBtn = document.getElementById('refreshBtn');
+        refreshBtn?.addEventListener('click', async () => {
+            await renderNotes(db, false);
+            const statusLabel = document.getElementById('note-status');
+            if (statusLabel) {
+                statusLabel.innerText = "列表已刷新";
+                setTimeout(() => statusLabel.innerText = "", 2000);
+            }
         });
 
         // 定时器：静默处理过期任务，不重新渲染整个列表（避免闪烁）
@@ -245,59 +288,24 @@ async function renderNotes(db: Database, allowNotification: boolean = false) {
             const noteElement = document.createElement('div');
             noteElement.className = 'note-item';
 
-            // 过滤过期笔记
+            // 过期任务：统一触发提醒（通知+时间更新/删除），然后跳过渲染
             const remindTime = new Date(note.remind_at).getTime();
             if (remindTime < currentTime) {
-                const timeDiff = currentTime - remindTime;
-                if (note.frequency === 'once') {
-                    // 单次任务，直接删除
-                    await db.execute("DELETE FROM notes WHERE id = ?", [note.id]);
-                    console.log(`任务已删除，ID: ${note.id}`);
-                } else if (note.frequency === 'daily') {
-                    // 处理每日任务
-                    const originalDate = new Date(remindTime);
-                    const nowDate = new Date(currentTime);
-                    const isSameDay = originalDate.getFullYear() === nowDate.getFullYear()
-                        && originalDate.getMonth() === nowDate.getMonth()
-                        && originalDate.getDate() === nowDate.getDate();
-
-                    // 只在首次加载且满足条件时才发送补偿通知
-                    if (allowNotification && isSameDay && timeDiff < 24 * 60 * 60 * 1000) {
-                        try {
-                            await invoke('send_task_notification', {
-                                title: '任务提醒',
-                                message: note.content
-                            });
-                            console.log(`已发送补偿通知，ID: ${note.id}`);
-                        } catch (err) {
-                            console.warn('发送补偿通知失败:', err);
-                        }
+                if (allowNotification) {
+                    await triggerNoteReminder(db, note);
+                } else {
+                    // 非首次加载时静默处理（不发送通知，只更新时间/删除）
+                    if (note.frequency === 'once') {
+                        await db.execute("DELETE FROM notes WHERE id = ?", [note.id]);
+                    } else if (note.frequency === 'daily') {
+                        const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);
+                        await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
+                    } else if (note.frequency === 'weekly') {
+                        const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);
+                        await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
                     }
-
-                    const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);
-                    await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
-                } else if (note.frequency === 'weekly') {
-                    // 处理每周任务
-                    const originalDate = new Date(remindTime);
-                    const nowDate = new Date(currentTime);
-                    const isSameWeekday = originalDate.getDay() === nowDate.getDay();
-
-                    // 只在首次加载且满足条件时才发送补偿通知
-                    if (allowNotification && isSameWeekday && timeDiff < 7 * 24 * 60 * 60 * 1000) {
-                        try {
-                            await invoke('send_task_notification', {
-                                title: '任务提醒',
-                                message: note.content
-                            });
-                            console.log(`已发送补偿通知（每周），ID: ${note.id}`);
-                        } catch (err) {
-                            console.warn('发送补偿通知失败:', err);
-                        }
-                    }
-
-                    const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);
-                    await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
                 }
+                continue; // 过期任务不渲染到界面
             }
 
             // 频率值映射
@@ -420,7 +428,61 @@ async function renderNotes(db: Database, allowNotification: boolean = false) {
     }
 }
 
-// 静默处理过期任务（定时器用，不重新渲染界面）
+// 记录已触发提醒的任务 ID 和触发时间，确保每个任务在当前周期只触发一次
+// key: note.id, value: 触发时的 remind_at 时间戳
+const notifiedMap = new Map<number, number>();
+
+/**
+ * 触发任务提醒：发送通知并立即处理时间更新/删除
+ * 这是唯一执行「发通知 + 更新时间」的函数，确保原子性
+ */
+async function triggerNoteReminder(db: Database, note: any): Promise<boolean> {
+    // 用 note.id + remind_at 时间戳双重判断：
+    // 同一个 remind_at 只触发一次；如果 remind_at 已更新为新的未来时间，则允许再次触发
+    const remindTime = new Date(note.remind_at).getTime();
+    const lastNotifiedAt = notifiedMap.get(note.id);
+    if (lastNotifiedAt === remindTime) return false;
+
+    // 标记当前 remind_at 已触发
+    notifiedMap.set(note.id, remindTime);
+
+    try {
+        // 1. 发送通知
+        await invoke('send_task_notification', {
+            title: '任务提醒',
+            message: note.content
+        });
+        console.log(`通知已发送，ID: ${note.id}`);
+    } catch (err) {
+        console.warn('发送通知失败:', err);
+    }
+
+    // 2. 立即处理时间更新/删除
+    try {
+        if (note.frequency === 'once') {
+            await db.execute("DELETE FROM notes WHERE id = ?", [note.id]);
+            notifiedMap.delete(note.id);
+            console.log(`单次任务已删除，ID: ${note.id}`);
+        } else if (note.frequency === 'daily') {
+            const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);
+            await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
+            console.log(`每日任务已更新下次时间，ID: ${note.id}，新时间: ${nextReminder.toISOString()}`);
+        } else if (note.frequency === 'weekly') {
+            const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);
+            await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
+            console.log(`每周任务已更新下次时间，ID: ${note.id}，新时间: ${nextReminder.toISOString()}`);
+        }
+    } catch (err) {
+        console.warn('更新任务时间失败:', err);
+    }
+
+    return true;
+}
+
+/**
+ * 轮询检查过期任务并触发提醒
+ * 只负责调度，通知和时间更新由 triggerNoteReminder 统一处理
+ */
 async function processExpiredNotes(db: Database) {
     try {
         const notes = await db.select("SELECT * FROM notes") as any[];
@@ -428,27 +490,18 @@ async function processExpiredNotes(db: Database) {
 
         for (const note of notes) {
             if (!note.remind_at) continue;
-
             const remindTime = new Date(note.remind_at).getTime();
-            if (remindTime < currentTime) {
-                if (note.frequency === 'once') {
-                    // 单次任务直接删除
-                    await db.execute("DELETE FROM notes WHERE id = ?", [note.id]);
-                } else if (note.frequency === 'daily') {
-                    const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);
-                    await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
-                } else if (note.frequency === 'weekly') {
-                    const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);
-                    await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
-                }
+            if (remindTime <= currentTime) {
+                await triggerNoteReminder(db, note);
             }
         }
     } catch (err) {
-        console.warn('静默更新过期任务失败:', err);
+        console.warn('轮询检查过期任务失败:', err);
     }
 }
 
 // 计算下一次提醒时间的函数
+// 保证返回的时间一定严格在当前时间之后
 function calculateNextReminder(remindTime: number, interval: number): Date {
     const currentTime = Date.now();
     const originalDate = new Date(remindTime);
@@ -458,27 +511,22 @@ function calculateNextReminder(remindTime: number, interval: number): Date {
     const originalMinutes = originalDate.getMinutes();
     const originalSeconds = originalDate.getSeconds();
 
-    // 先构造一个候选时间：今天的原始时间
-    const candidate = new Date(currentTime);
-    candidate.setHours(originalHours, originalMinutes, originalSeconds, 0);
-
-    const GRACE_MS = 60 * 1000; // 允许 1 分钟的容错窗口，避免因毫秒/秒差距把今天跳过
-
-    // 如果候选时间在现在之前但在容错窗口内，认为应当在今天触发（不要跳到下一周期）
-    if (candidate.getTime() >= currentTime - GRACE_MS) {
-        // 如果候选时间仍然小于当前时间但在容错内，返回候选时间（视为今天）
-        return candidate;
-    }
-
-    // 否则候选时间过早，向后移动到下一个有效周期（可能需要加多个周期以追平当前时间）
-    let next = new Date(candidate.getTime() + interval);
-    // 循环直到 next 在当前时间之后
+    // 构造候选时间：下一个周期的原始时间点
+    // 从原始 remindTime 开始，按 interval 递增直到超过当前时间
+    let next = new Date(remindTime);
     while (next.getTime() <= currentTime) {
         next = new Date(next.getTime() + interval);
     }
 
-    // 确保时分秒与原始计划一致（虽然通常已经保持一致）
+    // 保持时分秒与原始计划一致
     next.setHours(originalHours, originalMinutes, originalSeconds, 0);
+
+    // 如果调整时分秒后又落到了当前时间或之前，再推一个周期
+    if (next.getTime() <= currentTime) {
+        next = new Date(next.getTime() + interval);
+        next.setHours(originalHours, originalMinutes, originalSeconds, 0);
+    }
+
     return next;
 }
 
