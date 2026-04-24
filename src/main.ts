@@ -17,6 +17,9 @@ document.getElementById('titlebar-minimize')?.addEventListener('click', () => ap
 document.getElementById('titlebar-maximize')?.addEventListener('click', () => appWindow.toggleMaximize());
 document.getElementById('titlebar-close')?.addEventListener('click', () => appWindow.close());
 
+// 禁用右键菜单
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
 // --- 2. 数据库与业务逻辑 ---
 
 /**
@@ -127,8 +130,9 @@ async function setupApp() {
             )
         `);
 
-        // 3. 渲染笔记列表
-        await renderNotes(db);
+        // 3. 渲染笔记列表（首次加载时允许发送补偿通知）
+        await renderNotes(db, true);
+        let hasLoadedOnce = true;  // 标记已完成首次加载，后续调用不再发送补偿通知
         setupSidebar();
 
         await initAutostartUI();
@@ -161,7 +165,7 @@ async function setupApp() {
 
             // 清空输入框并刷新列表
             contentInput.value = '';
-            await renderNotes(db);
+            await renderNotes(db, false);
 
             // 更新状态显示
             if (statusLabel) {
@@ -194,10 +198,10 @@ async function setupApp() {
             });
         });
 
-        // 定时器：每 10 秒检查一次过期的提醒并更新界面
+        // 定时器：静默处理过期任务，不重新渲染整个列表（避免闪烁）
         setInterval(async () => {
             const db = await Database.load("sqlite:tasks.db");
-            await renderNotes(db);  // 只更新那些需要更新的任务
+            await processExpiredNotes(db);  // 只处理过期任务，不重新渲染
         }, 10000);
 
     } catch (err) {
@@ -207,7 +211,8 @@ async function setupApp() {
     }
 }
 // 渲染笔记列表
-async function renderNotes(db: Database) {
+// allowNotification: 是否允许发送补偿通知（仅首次加载时为 true）
+async function renderNotes(db: Database, allowNotification: boolean = false) {
     const container = document.getElementById('notes-container');
     if (!container) return;
 
@@ -250,15 +255,14 @@ async function renderNotes(db: Database) {
                     console.log(`任务已删除，ID: ${note.id}`);
                 } else if (note.frequency === 'daily') {
                     // 处理每日任务
-                    // 如果原始提醒是在今天且是最近一次（小于一个周期），则认为是启动时漏掉的提醒，立即发送一次通知再更新下一次
                     const originalDate = new Date(remindTime);
                     const nowDate = new Date(currentTime);
                     const isSameDay = originalDate.getFullYear() === nowDate.getFullYear()
                         && originalDate.getMonth() === nowDate.getMonth()
                         && originalDate.getDate() === nowDate.getDate();
 
-                    if (isSameDay && timeDiff < 24 * 60 * 60 * 1000) {
-                        // 发送一次补偿通知
+                    // 只在首次加载且满足条件时才发送补偿通知
+                    if (allowNotification && isSameDay && timeDiff < 24 * 60 * 60 * 1000) {
                         try {
                             await invoke('send_task_notification', {
                                 title: '任务提醒',
@@ -270,16 +274,16 @@ async function renderNotes(db: Database) {
                         }
                     }
 
-                    const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);  // 每日任务
+                    const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);
                     await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
-                    console.log(`已更新每日任务的提醒时间: ${nextReminder.toISOString()}`);
                 } else if (note.frequency === 'weekly') {
                     // 处理每周任务
                     const originalDate = new Date(remindTime);
                     const nowDate = new Date(currentTime);
                     const isSameWeekday = originalDate.getDay() === nowDate.getDay();
 
-                    if (isSameWeekday && timeDiff < 7 * 24 * 60 * 60 * 1000) {
+                    // 只在首次加载且满足条件时才发送补偿通知
+                    if (allowNotification && isSameWeekday && timeDiff < 7 * 24 * 60 * 60 * 1000) {
                         try {
                             await invoke('send_task_notification', {
                                 title: '任务提醒',
@@ -291,9 +295,8 @@ async function renderNotes(db: Database) {
                         }
                     }
 
-                    const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);  // 每周任务
+                    const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);
                     await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
-                    console.log(`已更新每周任务的提醒时间: ${nextReminder.toISOString()}`);
                 }
             }
 
@@ -308,10 +311,10 @@ async function renderNotes(db: Database) {
         <span class="quest-status ${freqValue}">[ ${freqLabel} ]</span>
         <span class="note-content">${note.content}</span>
         <button class="edit-btn" data-id="${note.id}">编辑</button>
-        <button class="delete-btn" data-id="${note.id}">删除</button> <!-- 删除按钮 -->
+        <button class="delete-btn" data-id="${note.id}">删除</button>
     </div>
     <div class="note-meta">
-        <span class="meta-label">NEXT_SYNC:</span> 
+        <span class="meta-label">NEXT_SYNC:</span>
         <span class="meta-value">${note.remind_at ? formatDateWithoutSeconds(note.remind_at) : 'STANDBY'}</span>
     </div>
 `;
@@ -319,24 +322,20 @@ async function renderNotes(db: Database) {
             // 删除按钮点击事件
             const deleteBtn = noteElement.querySelector('.delete-btn');
             deleteBtn?.addEventListener('click', async () => {
-                // 删除数据库中的任务
                 const taskId = (deleteBtn as HTMLButtonElement).getAttribute('data-id');
                 if (taskId) {
                     await db.execute("DELETE FROM notes WHERE id = ?", [taskId]);
                     console.log(`任务已删除，ID: ${taskId}`);
-
-                    // 重新渲染任务列表
-                    await renderNotes(db);
+                    await renderNotes(db, false);
                 }
             });
 
-            // 编辑按钮点击事件（内联编辑内容）
+            // 编辑按钮点击事件
             const editBtn = noteElement.querySelector('.edit-btn');
             editBtn?.addEventListener('click', async () => {
                 const contentSpan = noteElement.querySelector('.note-content') as HTMLSpanElement;
                 if (!contentSpan) return;
 
-                // 创建编辑 UI（content, remind_at, frequency）
                 const originalContent = contentSpan.innerText;
                 const textarea = document.createElement('textarea');
                 textarea.className = 'edit-textarea';
@@ -344,7 +343,6 @@ async function renderNotes(db: Database) {
                 textarea.style.width = '100%';
                 textarea.style.boxSizing = 'border-box';
 
-                // 创建提醒时间输入框（datetime-local）
                 const metaRow = document.createElement('div');
                 metaRow.className = 'edit-meta-row';
                 const timeInput = document.createElement('input');
@@ -360,16 +358,13 @@ async function renderNotes(db: Database) {
                 metaRow.appendChild(timeInput);
                 metaRow.appendChild(freqSelect);
 
-                // 替换内容显示为编辑框与元数据行
                 contentSpan.replaceWith(textarea);
                 const header = noteElement.querySelector('.note-header');
                 header?.insertAdjacentElement('afterend', metaRow);
 
-                // 隐藏编辑和删除按钮
                 (editBtn as HTMLElement).style.display = 'none';
                 (deleteBtn as HTMLElement).style.display = 'none';
 
-                // 创建保存与取消按钮
                 const saveBtn = document.createElement('button');
                 saveBtn.className = 'save-edit-btn';
                 saveBtn.innerText = '保存';
@@ -380,7 +375,6 @@ async function renderNotes(db: Database) {
                 header?.appendChild(saveBtn);
                 header?.appendChild(cancelBtn);
 
-                // 保存事件：更新 content, remind_at, frequency
                 saveBtn.addEventListener('click', async () => {
                     const newContent = textarea.value.trim();
                     const newRemindAt = timeInput.value ? timeInput.value.replace('T', ' ') : null;
@@ -400,20 +394,16 @@ async function renderNotes(db: Database) {
                         return;
                     }
 
-                    // 重新渲染列表以反映变化
-                    await renderNotes(db);
+                    await renderNotes(db, false);
                 });
 
-                // 取消事件
                 cancelBtn.addEventListener('click', () => {
-                    // 恢复原始显示
                     const restoredSpan = document.createElement('span');
                     restoredSpan.className = 'note-content';
                     restoredSpan.innerText = originalContent;
                     textarea.replaceWith(restoredSpan);
                     metaRow.remove();
 
-                    // 恢复按钮状态并移除保存/取消
                     (editBtn as HTMLElement).style.display = '';
                     (deleteBtn as HTMLElement).style.display = '';
                     saveBtn.remove();
@@ -427,6 +417,34 @@ async function renderNotes(db: Database) {
     } catch (err) {
         console.error("加载列表失败:", err);
         container.innerHTML = '<div class="error-msg">数据同步中断，请稍后重试。</div>';
+    }
+}
+
+// 静默处理过期任务（定时器用，不重新渲染界面）
+async function processExpiredNotes(db: Database) {
+    try {
+        const notes = await db.select("SELECT * FROM notes") as any[];
+        const currentTime = Date.now();
+
+        for (const note of notes) {
+            if (!note.remind_at) continue;
+
+            const remindTime = new Date(note.remind_at).getTime();
+            if (remindTime < currentTime) {
+                if (note.frequency === 'once') {
+                    // 单次任务直接删除
+                    await db.execute("DELETE FROM notes WHERE id = ?", [note.id]);
+                } else if (note.frequency === 'daily') {
+                    const nextReminder = calculateNextReminder(remindTime, 24 * 60 * 60 * 1000);
+                    await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
+                } else if (note.frequency === 'weekly') {
+                    const nextReminder = calculateNextReminder(remindTime, 7 * 24 * 60 * 60 * 1000);
+                    await db.execute("UPDATE notes SET remind_at = ? WHERE id = ?", [nextReminder.toISOString(), note.id]);
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('静默更新过期任务失败:', err);
     }
 }
 

@@ -1,424 +1,552 @@
-/*
-
-  Clean, warm-white theme and deduplicated rules
-
-  主色调：暖白色；移除重复定义，保留必要布局样式
-
-*/
-
-
+/* ============================================
+   Notmin - Modern Warm Theme
+   ============================================ */
 
 :root {
+    --font-stack: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
 
-    --font-stack: Inter, system-ui, 'Segoe UI', "Microsoft YaHei", Arial, sans-serif;
+    /* 暖白主题色系 */
+    --bg: #FAF7F2;
+    --panel-bg: #FFFFFF;
+    --sidebar-bg: #F5EDE3;
+    --card-bg: #FFFEFA;
 
-    --bg: #FBF6EE;
-    /* 页面背景（暖白） */
+    /* 文字颜色 */
+    --text: #2D2A26;
+    --text-secondary: #6B6560;
+    --muted: #9A9489;
 
-    --panel-bg: #FFF9F3;
-    /* 卡片/面板 背景 */
+    /* 强调色 */
+    --accent: #C4956A;
+    --accent-hover: #B8865A;
+    --accent-light: rgba(196, 149, 106, 0.15);
 
-    --sidebar-bg: #F4EDE0;
-    /* 侧边栏 背景 */
+    /* 边框 */
+    --border: #E8E2D9;
+    --border-focus: #C4956A;
 
-    --text: #2b2b2b;
-    /* 主要文字（深色） */
+    /* 按钮 */
+    --btn-bg: linear-gradient(135deg, #D4C4A8 0%, #C9B998 100%);
+    --btn-hover: linear-gradient(135deg, #CBBFA0 0%, #BFAE90 100%);
+    --btn-shadow: 0 2px 8px rgba(0,0,0,0.08);
 
-    --muted: #7a6f60;
-    /* 辅助文字 */
+    /* 状态色 */
+    --success: #5B9A6B;
+    --warning: #D4A04A;
+    --danger: #D46A6A;
+    --info: #5A8AC4;
 
-    --accent: #CDA56A;
-    /* 重点色（暖金） */
-
-    --border-color: #E6DACB;
-    /* 边框颜色 */
-
-    --btn-bg: #D9C7A3;
-
-    --btn-hover: #CBB08C;
-
-    --sidebar-width: 320px;
-    --app-max-width: 1100px;
-
+    --sidebar-width: 340px;
+    --app-max-width: 1000px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
 }
 
+/* Reset */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-
-* {
-    box-sizing: border-box;
-}
-
-html,
-body {
+html, body {
     height: 100%;
-    margin: 0;
-    padding: 0;
     font-family: var(--font-stack);
     background: var(--bg);
     color: var(--text);
-    font-size: 16px;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
-
-
-/* Titlebar */
-
-/* Titlebar - keep on top so window controls remain reachable when maximized */
+/* ============================================
+   Titlebar
+   ============================================ */
 #titlebar {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 36px;
-    background: var(--sidebar-bg);
+    top: 0; left: 0; right: 0;
+    height: 42px;
+    background: linear-gradient(180deg, var(--sidebar-bg) 0%, #EDE5D8 100%);
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--border-color);
-    padding: 0 8px;
+    padding: 0 12px;
     z-index: 100;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .window-app-info {
     display: flex;
     align-items: center;
-    color: var(--accent);
-}
-
-.app-icon {
-    margin-right: 8px;
+    gap: 6px;
 }
 
 .app-icon-img {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-    vertical-align: middle;
-    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+}
+
+.menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text);
+    transition: background 0.15s;
+}
+.menu-trigger:hover { background: rgba(0,0,0,0.05); }
+
+.toggle-icon {
+    font-size: 18px;
+    color: var(--accent);
 }
 
 .window-controls {
     display: flex;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
 }
 
-.window-controls .control-btn {
-    width: 36px;
+/* 自定义复选框 */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+.checkbox-label:hover { background: rgba(0,0,0,0.03); }
+.checkbox-label input[type="checkbox"] { display: none; }
+.custom-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+.checkbox-label input:checked + .custom-checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+/* 窗口控制按钮 */
+.control-btn {
+    width: 34px;
     height: 28px;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: transparent;
-    color: var(--text);
+    color: var(--text-secondary);
     cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
 }
-
-.window-controls .control-btn:hover {
-    background: var(--btn-hover);
+.control-btn:hover {
+    background: rgba(0,0,0,0.08);
+    color: var(--text);
 }
-
-.window-controls .control-btn.close:hover {
-    background: #E85B5B;
+.control-btn.close:hover {
+    background: var(--danger);
     color: #fff;
 }
 
-
-
-/* Layout */
-
-/* App root: center the app and let .app-shell constrain max width
-   use percentage width here to avoid horizontal scrollbars from vw on zoom */
-/* App root: center the app and let .app-shell constrain max width
-   use percentage width here to avoid horizontal scrollbars from vw on zoom */
+/* ============================================
+   Layout
+   ============================================ */
 #app {
     display: flex;
-    justify-content: center; /* center the app to create a narrower visual width */
+    justify-content: center;
     width: 100%;
-    min-height: calc(100vh - 36px);
-    padding-top: 36px; /* make room for fixed titlebar */
+    min-height: calc(100vh - 42px);
+    padding-top: 42px;
     overflow: hidden;
-    background: transparent;
-    position: relative; /* for absolute-positioned sidebar/overlay */
-}
-
-/* Sidebar: fixed width, but collapsible without causing main content overflow */
-
-/* Sidebar as an overlay so it doesn't shrink the main content when opened */
-.sidebar {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--sidebar-width);
-    background: var(--sidebar-bg);
-    border-right: 1px solid var(--border-color);
-    padding: 20px;
-    box-sizing: border-box;
-    overflow-y: auto;
-    transform: translateX(-100%); /* hidden by default */
-    transition: transform 0.18s ease, opacity 0.12s ease;
-    z-index: 300; /* high so native dropdowns render above overlay */
-    box-shadow: 2px 0 12px rgba(0,0,0,0.06);
-}
-
-.sidebar:not(.collapsed) {
-    transform: translateX(0);
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.sidebar.collapsed {
-    transform: translateX(-100%);
-    opacity: 0;
-    pointer-events: none;
-}
-
-.sidebar-inner {
-    width: 100%;
-    padding: 12px;
-    box-sizing: border-box;
-}
-
-/* Make editor fluid inside sidebar so it never forces layout width */
-.note-editor {
-    width: 100%;
-    max-width: 100%;
-    background: var(--panel-bg);
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    position: relative;
 }
 
 .app-shell {
     width: 100%;
     max-width: var(--app-max-width);
     display: flex;
-    flex: 1 1 auto;
-    margin: 0 12px; /* small horizontal breathing room */
-    z-index: 10; /* keep main content under overlay/sidebar */
+    margin: 0 16px;
+    z-index: 10;
 }
 
-.note-list {
-    flex: 1 1 auto;
-    padding: 24px;
-    overflow-y: auto;
-    min-width: 0;
-}
-
-/* Overlay used when sidebar is open in overlay mode */
-.overlay {
-    /* only dim the main content area (to the right of sidebar) so sidebar UI and dropdowns remain fully usable */
+/* 侧边栏 */
+.sidebar {
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: var(--sidebar-width);
-    background: rgba(0,0,0,0.08); /* very light dim */
+    left: 0; top: 0; bottom: 0;
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    padding: 20px;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 300;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.08);
+}
+.sidebar:not(.collapsed) { transform: translateX(0); }
+.sidebar.collapsed { transform: translateX(-100%); pointer-events: none; }
+
+.sidebar-inner { width: 100%; }
+
+/* 遮罩层 */
+.overlay {
+    position: fixed;
+    top: 42px; right: 0; bottom: 0; left: var(--sidebar-width);
+    background: rgba(0,0,0,0.06);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.18s ease, visibility 0.18s ease, left 0.18s ease;
-    z-index: 90; /* below the sidebar (300) but above content (10) */
+    transition: all 0.25s;
+    z-index: 90;
 }
-.overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
-/* Only allow pointer events when overlay is active to avoid blocking inputs */
-.overlay {
-    pointer-events: none;
-}
-.overlay.active {
-    pointer-events: auto;
-}
+.overlay.active { opacity: 1; visibility: visible; }
 
-/* Ensure interactive elements are not inside the OS drag region and accept events */
-/* Tauri uses -webkit-app-region: drag on drag regions; explicitly opt-out here */
-.sidebar,
-.sidebar-inner,
-.note-editor,
-textarea,
-input,
-select,
-button,
-.control-btn,
-.menu-trigger {
-    -webkit-app-region: no-drag;
+/* ============================================
+   Note Editor (Sidebar)
+   ============================================ */
+.note-editor {
+    background: var(--panel-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
 }
 
-/* Make sure form controls always accept pointer events */
-textarea, input, select, button {
-    pointer-events: auto;
+.note-editor h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
 }
 
+.symbol {
+    color: var(--accent);
+    font-weight: 700;
+}
 
-
-/* Form elements */
-
+/* 输入框样式 */
 textarea,
 input[type="datetime-local"],
 select {
     width: 100%;
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--panel-bg);
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card-bg);
     color: var(--text);
     font-family: inherit;
+    font-size: 14px;
+    transition: all 0.2s;
+    outline: none;
 }
-
-textarea {
-    min-height: 120px;
-    resize: vertical;
+textarea:focus,
+input[type="datetime-local"]:focus,
+select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
 }
+textarea { min-height: 100px; resize: vertical; }
 
+textarea::placeholder,
+input::placeholder { color: var(--muted); }
 
-
-/* Buttons */
-
-.actions {
+/* 配置区域 */
+.timer-configs {
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+    gap: 14px;
+    margin: 16px 0;
 }
+.config-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.config-item label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* 按钮组 */
+.actions { display: flex; gap: 10px; margin-top: 16px; }
 
 button {
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 11px 18px;
+    border-radius: var(--radius-md);
     border: none;
     cursor: pointer;
-    transition: background 0.18s ease;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
 }
 
 .primary-btn {
     background: var(--btn-bg);
     color: var(--text);
+    box-shadow: var(--btn-shadow);
+    flex: 1;
 }
-
 .primary-btn:hover {
     background: var(--btn-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
+.primary-btn:active { transform: translateY(0); }
 
 .secondary-btn {
     background: transparent;
     color: var(--accent);
+    border: 1.5px solid var(--accent);
+}
+.secondary-btn:hover {
+    background: var(--accent-light);
 }
 
+#notifyBtn {
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    font-size: 12px;
+}
+#notifyBtn:hover {
+    background: var(--panel-bg);
+    border-color: var(--accent);
+}
 
+.status-message {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--success);
+    text-align: center;
+    min-height: 20px;
+}
 
-/* Notes */
+/* ============================================
+   Note List (Main Area)
+   ============================================ */
+.note-list {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    min-width: 0;
+}
 
+.note-list h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text);
+}
+
+/* 任务卡片 */
 .note-item {
     background: var(--panel-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 14px;
-    margin-bottom: 12px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
-    transition: transform .12s ease;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
 }
-
+.note-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
 .note-item:hover {
-    transform: translateY(-3px);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
 }
+.note-item:hover::before { opacity: 1; }
 
+/* 任务状态标签 */
 .note-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    gap: 12px;
+    margin-bottom: 10px;
 }
 
 .quest-status {
-    font-size: .85rem;
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.03);
-    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--accent-light);
+    color: var(--accent);
+}
+.quest-status.daily {
+    background: rgba(91, 154, 107, 0.12);
+    color: var(--success);
+}
+.quest-status.weekly {
+    background: rgba(90, 138, 196, 0.12);
+    color: var(--info);
+}
+.quest-status.once {
+    background: rgba(212, 160, 74, 0.12);
+    color: var(--warning);
 }
 
+/* 任务内容 */
 .note-content {
-    font-size: .98rem;
+    font-size: 15px;
     color: var(--text);
+    line-height: 1.6;
+    margin-bottom: 10px;
 }
 
+/* 任务元信息 */
 .note-meta {
-    font-size: .85rem;
-    color: var(--muted);
-}
-
-.delete-btn {
-    padding: 6px 10px;
-    background: #E85B5B;
-    color: #fff;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-}
-
-.delete-btn:hover {
-    background: #D84B4B;
-}
-
-
-
-.card {
-    background: var(--panel-bg);
-    border: 1px solid var(--border-color);
-    padding: 16px;
-    border-radius: 12px;
-}
-
-.empty-msg {
-    text-align: center;
-    color: var(--muted);
-    font-size: 1rem;
-}
-
-
-
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-
-
-/* small utilities */
-
-#notifybtn {
-    background: var(--btn-bg);
-    color: var(--text);
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: none;
-}
-
-
-
-/* keep menu-trigger minimal */
-
-.menu-trigger {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+}
+.meta-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.meta-value {
+    font-family: 'Consolas', monospace;
 }
 
-.menu-trigger:hover { background: rgba(0,0,0,0.03); }
-
-/* small responsive tweaks when app is narrow */
-@media (max-width: 760px) {
-  :root { --sidebar-width: 260px; }
-  .app-shell { padding: 12px; }
-  .note-editor { padding: 12px; }
+/* 操作按钮 */
+.note-header .edit-btn,
+.note-header .delete-btn,
+.note-header .save-edit-btn,
+.note-header .cancel-edit-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    margin-left: auto;
 }
+
+.edit-btn {
+    background: var(--accent-light);
+    color: var(--accent);
+}
+.edit-btn:hover { background: var(--accent); color: #fff; }
+
+.delete-btn {
+    background: rgba(212, 106, 106, 0.1);
+    color: var(--danger);
+}
+.delete-btn:hover { background: var(--danger); color: #fff; }
+
+.save-edit-btn {
+    background: var(--success);
+    color: #fff;
+}
+.save-edit-btn:hover { background: #4A8A5B; }
+
+.cancel-edit-btn {
+    background: var(--text-secondary);
+    color: #fff;
+}
+.cancel-edit-btn:hover { background: var(--text); }
+
+/* 空状态 */
+.empty-msg {
+    text-align: center;
+    color: var(--muted);
+    font-size: 15px;
+    padding: 40px 20px;
+    background: var(--panel-bg);
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--border);
+}
+
+/* 错误状态 */
+.error-msg {
+    text-align: center;
+    color: var(--danger);
+    font-size: 14px;
+    padding: 20px;
+    background: rgba(212, 106, 106, 0.08);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(212, 106, 106, 0.2);
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-15px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.note-item {
+    animation: fadeIn 0.3s ease forwards;
+}
+
+/* ============================================
+   Scrollbar - Thin and subtle
+   ============================================ */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+
+/* For Firefox - always thin */
+.note-list, .sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) rgba(0, 0, 0, 0.03);
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 768px) {
+    :root { --sidebar-width: 280px; }
+    .app-shell { padding: 12px; }
+    .note-editor { padding: 14px; }
+    .note-list { padding: 16px; }
+}
+
+/* ============================================
+   Drag Region Fix
+   ============================================ */
+.sidebar, .sidebar-inner, .note-editor, textarea, input, select,
+button, .control-btn, .menu-trigger, .checkbox-label {
+    -webkit-app-region: no-drag;
+}
+textarea, input, select, button { pointer-events: auto; }
